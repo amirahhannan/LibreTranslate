@@ -1,4 +1,4 @@
-FFROM python:3.11.11-slim-bullseye AS builder
+FROM python:3.11.11-slim-bullseye AS builder
 
 WORKDIR /app
 
