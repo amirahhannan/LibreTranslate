@@ -1,4 +1,4 @@
-FROM python:3.11.11-slim-bullseye AS builder
+FFROM python:3.11.11-slim-bullseye AS builder
 
 WORKDIR /app
 
@@ -14,8 +14,8 @@ RUN python -mvenv venv && ./venv/bin/pip install --no-cache-dir --upgrade pip
 COPY . .
 
 # Install package from source code, compile translations
-RUN ./venv/bin/pip install Babel==2.12.1 && ./venv/bin/python scripts/compile_locales.py \
-  && ./venv/bin/pip install torch==$(grep -o -m1 'torch.*;' pyproject.toml|sed 's/[^0-9.]//g') --extra-index-url https://download.pytorch.org/whl/cpu \
+RUN ./venv/bin/pip install Babel==2.12.1 \
+  && ./venv/bin/pip install torch==$(grep -o -m1 'torch.*;' pyproject.toml | sed 's/[^0-9.]//g') --extra-index-url https://download.pytorch.org/whl/cpu \
   && ./venv/bin/pip install "numpy<2" \
   && ./venv/bin/pip install . \
   && ./venv/bin/pip cache purge
@@ -23,24 +23,26 @@ RUN ./venv/bin/pip install Babel==2.12.1 && ./venv/bin/python scripts/compile_lo
 FROM python:3.11.11-slim-bullseye
 
 ARG with_models=true
-ARG models="en,bd,ur,ar,ja,zh,hi,ms,id,kk,de,ye,ar,fr,ko"
+ARG models="en,bn,ur,ar,ja,zh,hi,ms,id,kk,de,ye,fr,ko"  # Use correct ISO codes
 
-RUN addgroup --system --gid 1032 libretranslate && adduser --system --uid 1032 libretranslate && mkdir -p /home/libretranslate/.local && chown -R libretranslate:libretranslate /home/libretranslate/.local
+RUN addgroup --system --gid 1032 libretranslate \
+  && adduser --system --uid 1032 libretranslate \
+  && mkdir -p /home/libretranslate/.local \
+  && chown -R libretranslate:libretranslate /home/libretranslate/.local
+
 USER libretranslate
 
 COPY --from=builder --chown=1032:1032 /app /app
 WORKDIR /app
-
 COPY --from=builder --chown=1032:1032 /app/venv/bin/ltmanage /usr/bin/
 
-RUN if [ "$with_models" = "true" ]; then  \
-  # initialize the language models
-  if [ ! -z "$models" ]; then \
-  ./venv/bin/python scripts/install_models.py --load_only_lang_codes "$models";   \
-  else \
-  ./venv/bin/python scripts/install_models.py;  \
-  fi \
-  fi
+# Initialize only selected language models
+RUN if [ "$with_models" = "true" ]; then \
+      ./venv/bin/python scripts/install_models.py --load_only_lang_codes "$models"; \
+    fi
 
+# Expose port 5000 for Render
 EXPOSE 5000
-ENTRYPOINT [ "./venv/bin/libretranslate", "--host", "*" ]
+
+# Start LibreTranslate server and explicitly bind to port 5000
+ENTRYPOINT ["./venv/bin/libretranslate", "--host", "*", "--port", "5000"]
